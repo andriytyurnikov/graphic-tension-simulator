@@ -354,16 +354,7 @@ function drawTensionFieldHeatmap() {
     	}
 	}
 
-	// for (var x = 0; x < width; x += 1) {
-  //   	for (var y = 0; y < height; y += 1) {
-	// 			currentIndex = y + x * width;
-	// 			normalizedValue = heatmapMatrix[ currentIndex ] || 0;
-	// 			transformedHeatmapMatrix.push([x, y, normalizedValue])
-  // 		}
-	// }
 	simpleheatInstance.max(maximalValue);
-	console.log(maximalValue);
-	console.log(transformedHeatmapMatrix[transformedHeatmapMatrix.length / 3]);
 	simpleheatInstance.data(transformedHeatmapMatrix)
 	simpleheatInstance.draw(0.05)
 }
