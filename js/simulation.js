@@ -23,7 +23,7 @@ var GAP = 40; // margin for initial points
 var MIN_SIZE = 40; // object minimum size
 var MAX_SIZE = 40; // object maximum size
 var CAPACITANCE = 15; // electrical charge capacity, 'electro viscocity'
-var DRAG_AMOUNT = 1; //  scale factor of dragging for mass scale 
+var DRAG_AMOUNT = 1; //  scale factor of dragging for mass scale
 var FORCE_SCALE = 130; // forces lines multiplicator
 var FIELD_SCALE = 20; // tension field lines multiplicator
 var TENSION_FIELD_STEP = 5;
@@ -41,7 +41,7 @@ var pickedObjectIndex = -1; // buffer for clicked object index
 var maxIntensityMemory = 0.2;
 var adaptiveTensionFieldStep = TENSION_FIELD_STEP;
 var adaptiveTensionFieldDirection = 1;
-var isTensionFieldAdaptive = false; 
+var isTensionFieldAdaptive = false;
 var isScaling = false; // flag of object scaling while drug-n-drop
 var isDeleting = false; // flag of object deleting
 var isMoving = false; // flag of object moving
@@ -51,6 +51,7 @@ var showField = false; // field picture
 var showDisplacements = false; // displacemens lines
 var showResultForces = false; // resulrint Forces-arrows
 var showFrame = false;
+var showHeatmap = false; // map tension on particles on colors
 var isFramed = true; // mass-electric constraints on frame boundary
 var isSimulating = false; // animation trigger
 var wasAutoSwitched = true;
@@ -59,6 +60,8 @@ var objects =  new Array();
 var obstacles =  new Array();
 var objects_all =  new Array();
 var delta = new Array();
+var heatmapData = new Array();
+var simpleheatInstance = null;
 
 //p5.disableFriendlyErrors = true;
 
@@ -66,6 +69,9 @@ function setup() {
 
 	var canvasSize = getCanvasSize();
 	var canvas = createCanvas(canvasSize[0], canvasSize[1]);
+	simpleheatInstance = simpleheat(canvas.canvas);
+	simpleheatInstance.radius(25, 25);
+	// simpleheatInstance.gradient({0.1: 'blue', 1000000.0: 'lime', 52791746.0: 'red'})
 
 	// setup an interaction inside simulator canvas
 	canvas.mousePressed(function() {
@@ -115,11 +121,12 @@ function draw() {
 	var delta = calculateDisplacements(objects_all);
 
 	simulateMotion(delta);
+	drawTensionFieldHeatmap();
 	drawTensionField();
 	drawParticles(delta);
 	drawFrame();
 	drawCursor();
-	//drawFPS();
+	drawFPS();
 	drawInstruction();
 }
 
@@ -130,7 +137,7 @@ function populateInitially() {
 	objects.push([width - GAP, height - GAP, MIN_SIZE]);
 	objects.push([width - GAP, GAP, MIN_SIZE]);
 
-	if (isFramed) {                    
+	if (isFramed) {
 		// horizontal frame part
 		for (var x = 0; x <= width; x += borderStep) {
 		  obstacles.push([x, 0, borderWeight]);
@@ -155,7 +162,7 @@ function populateInitially() {
 function getCanvasSize() {
 	w = $('#sketch-holder').width();
 
-	var shift = w % MIN_SIZE;	
+	var shift = w % MIN_SIZE;
 	$('#controls').css('padding-right', Math.round(shift) + 'px');
 
 	w = w - shift;
@@ -187,7 +194,7 @@ function controlAnimation() {
 
 
 function simulateMotion(delta) {
-	if (!isSimulating) { 
+	if (!isSimulating) {
 		return;
 	}
 	var realObjectsNumber = objects.length;
@@ -202,7 +209,7 @@ function calculateDisplacements(objectsArray) {
 	// TODO: optimize. no need to calulate it when simulation is stopped
 	var delta = new Array();
 	var realObjectsNumber = objects.length;
-	
+
 	stroke(0, 0, 255);
 	strokeWeight(0.25);
 
@@ -215,7 +222,7 @@ function calculateDisplacements(objectsArray) {
 		    var _delta = calculateDeltaByIndex(j, i, objectsArray);
 		    delta[i][0] += _delta[0];
 		    delta[i][1] += _delta[1];
-		    
+
 		    if (showDisplacements) {
 		    	var x1 = objects[i][0];
 		    	var x2 = x1 + _delta[0] * FORCE_SCALE;
@@ -239,7 +246,7 @@ function calculateIntensity(x, y) {
      	var _y = objects_all[k][1];
      	var squareMass = area(objects_all[k][2]);
      	var __delta = calculateDelta(x, y, _x, _y, squareMass);
-     	_delta[0] += __delta[0]; 
+     	_delta[0] += __delta[0];
      	_delta[1] += __delta[1];
 	}
 	return _delta;
@@ -247,7 +254,7 @@ function calculateIntensity(x, y) {
 
 
 
-function drawParticles(delta) {	
+function drawParticles(delta) {
 	var realObjectsNumber = objects.length;
 	var mappedColors = [];
 	if (showTension) {
@@ -261,7 +268,7 @@ function drawParticles(delta) {
 		});
 		for (var i = 0; i < realObjectsNumber; i++) {
 			var newVal = map(magnitudes[i], 0, maxIntensityMemory, 0, 255);
-			mappedColors.push(newVal);	
+			mappedColors.push(newVal);
 		}
 	}
 	for (var i = 0; i < realObjectsNumber; i++) {
@@ -292,7 +299,7 @@ function drawParticles(delta) {
 
 
 function drawTensionField() {
-	
+
 	if (!showField) return;
 
 	strokeWeight(0.5);
@@ -322,6 +329,43 @@ function drawTensionField() {
       		line(x, y, x + FIELD_SCALE * vec.x, y + FIELD_SCALE * vec.y);
     	}
 	}
+}
+
+function quadraticToLinear(value) {
+	return Math.pow((value), 0.5)
+}
+
+function drawTensionFieldHeatmap() {
+	simpleheatInstance.clear()
+	if (!showHeatmap) return;
+	heatmapMatrix = new Array();
+	transformedHeatmapMatrix = new Array();
+	maximalValue = 0.001;
+
+ 	for (var x = 0; x < width; x += 10) {
+    	for (var y = 0; y < height; y += 10) {
+     		var _delta = calculateIntensity(x, y);
+    		var vec = createVector(_delta[0], _delta[1]);
+    		var value = quadraticToLinear(vec.mag());
+				transformedHeatmapMatrix.push([x, y, value])
+				if(value > maximalValue) {
+					maximalValue = value;
+				}
+    	}
+	}
+
+	// for (var x = 0; x < width; x += 1) {
+  //   	for (var y = 0; y < height; y += 1) {
+	// 			currentIndex = y + x * width;
+	// 			normalizedValue = heatmapMatrix[ currentIndex ] || 0;
+	// 			transformedHeatmapMatrix.push([x, y, normalizedValue])
+  // 		}
+	// }
+	simpleheatInstance.max(maximalValue);
+	console.log(maximalValue);
+	console.log(transformedHeatmapMatrix[transformedHeatmapMatrix.length / 3]);
+	simpleheatInstance.data(transformedHeatmapMatrix)
+	simpleheatInstance.draw(0.01)
 }
 
 function drawFrame() {
