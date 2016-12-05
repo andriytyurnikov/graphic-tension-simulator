@@ -70,7 +70,7 @@ function setup() {
 	var canvasSize = getCanvasSize();
 	var canvas = createCanvas(canvasSize[0], canvasSize[1]);
 	simpleheatInstance = simpleheat(canvas.canvas);
-	simpleheatInstance.radius(15, 15);
+	simpleheatInstance.radius(TENSION_FIELD_STEP, TENSION_FIELD_STEP);
 	// simpleheatInstance.gradient({0.1: 'blue', 1000000.0: 'lime', 52791746.0: 'red'})
 
 	// setup an interaction inside simulator canvas
@@ -332,7 +332,7 @@ function drawTensionField() {
 }
 
 function quadraticToLinear(value) {
-	return Math.pow((value), 0.5)
+	return (Math.pow((value), 0.125))
 }
 
 function drawTensionFieldHeatmap() {
@@ -342,8 +342,8 @@ function drawTensionFieldHeatmap() {
 	transformedHeatmapMatrix = new Array();
 	maximalValue = 0.001;
 
- 	for (var x = 0; x < width; x += 10) {
-    	for (var y = 0; y < height; y += 10) {
+ 	for (var x = 0; x < width; x += TENSION_FIELD_STEP) {
+    	for (var y = 0; y < height; y += TENSION_FIELD_STEP) {
      		var _delta = calculateIntensity(x, y);
     		var vec = createVector(_delta[0], _delta[1]);
     		var value = quadraticToLinear(vec.mag());
